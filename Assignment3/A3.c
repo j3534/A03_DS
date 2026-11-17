@@ -7,6 +7,11 @@
 *	This file contains the code for the program's entire functionality
 */
 
+// names.txt is a text file containing 3000 all lowercase full names
+// it is placed in the same directory as this source file so that the relative path "names.txt" can be easily used
+
+// compare.jpg is placed in the top level directory of the solution
+
 #pragma warning(disable:4996)
 
 #include <stdio.h>
@@ -14,7 +19,7 @@
 #include <string.h>
 
 #define BUCKET_COUNT 127
-#define READ_NAME_BUFFER_SIZE 33
+#define READ_NAME_BUFFER_SIZE 33 // 30 + 3 for \r\n and \0
 
 struct NameNode {
 	char* name;
@@ -109,6 +114,7 @@ void insertNameIntoLinkedList(struct NameNode** head, char* name) {
 	struct NameNode* node = createNameNode(name);
 
 	if (*head == NULL) {
+		// if we are the first, don't do any more checks, assign the head and return immediately
 		*head = node;
 	}
 	else {
@@ -136,7 +142,7 @@ void insertNameIntoLinkedList(struct NameNode** head, char* name) {
 /*
 * FUNCTION							: insertNameIntoHashTable
 * DESCRIPTION						:
-*	A function to insert a new name into the hash table and its linked lists
+*	A function to insert a new name into a bucket of the hash table
 * PARAMETERS						:
 *	struct NameHashTable* hashTable : A pointer to the hash table to insert into
 *	char* name						: The name to insert
@@ -152,7 +158,7 @@ void insertNameIntoHashTable(struct NameHashTable* hashTable, char* name) {
 /*
 * FUNCTION		    : removeNewLine
 * DESCRIPTION		:
-*	Removes the first new line character from a string
+*	A function to remove the first new line character from a string
 * PARAMETERS		:
 *	char* str		: The string to remove a new line from
 * RETURNS		    :
@@ -167,20 +173,24 @@ void removeNewLine(char* str) {
 * DESCRIPTION						:
 *	A function to search a linked list for a specific name
 * PARAMETERS						:
-*	char* searchName				: The name to search
+*	char* searchName				: The name to search for
 *	struct NameNode* head			: A pointer to the head of the linked list
 *	int* comparisonCount			: A pointer to an integer for storing how many comparisons it took
 * RETURNS							:
 * 	struct NameNode*				: A pointer to the node containing the name
 */
 struct NameNode* searchLinkedList(char* searchName, struct NameNode* head, int* comparisonCount) {
+	*comparisonCount = 0;
+
 	struct NameNode* result = NULL;
 
 	struct NameNode* current = head;
-	while (current != NULL && result == NULL) {
+	while (current != NULL) {
 		(*comparisonCount)++;
+
 		if (strcmp(searchName, current->name) == 0) {
 			result = current;
+			break;
 		}
 
 		current = current->next;
@@ -192,14 +202,71 @@ struct NameNode* searchLinkedList(char* searchName, struct NameNode* head, int* 
 /*
 * FUNCTION							: searchForNameTwice
 * DESCRIPTION						:
-*	A function to search a hash table and the linked list of the bucket for a specific name
+*	A function to search both a hashtable and linked list for a name
 * PARAMETERS						:
-*	char* searchName				: The name to search
+*	char* searchName				: The name to search for
+*	struct NameHashTable* hashTable : A pointer to the hash table 
+*	int* comparisonCount[2]			: A pointer to an integer array for storing how many comparisons both paths took
 *	struct NameNode* head			: A pointer to the head of the linked list
-*	int* comparisonCount			: A pointer to an integer for storing how many comparisons it took
 * RETURNS							:
-* 	struct NameNode*				: A pointer to the node containing the name
+* 	void							: No return value
 */
+void searchForNameTwice(char* searchName, struct NameHashTable* hashTable, int comparisonCount[2], struct NameNode* head) {
+	if (searchLinkedList(searchName, head, &comparisonCount[0]) != NULL) {
+		printf("\t%s was found in the %s in %d comparisons\n", searchName, "linked list", comparisonCount[0]);
+	}
+	else {
+		printf("\t%s was NOT found in the %s in %d comparisons\n", searchName, "linked list", comparisonCount[0]);
+	}
+
+	int bucket = generateHash(searchName);
+	struct NameNode* bucketHead = hashTable->buckets[bucket];
+	if (searchLinkedList(searchName, bucketHead, &comparisonCount[1]) != NULL) {
+		printf("\t%s was found in the %s in %d comparisons\n", searchName, "hash table bucket", comparisonCount[1]);
+	}
+	else {
+		printf("\t%s was NOT found in the %s in %d comparisons\n", searchName, "hash table bucket", comparisonCount[1]);
+	}
+}
+
+/*
+* FUNCTION					: freeLinkedList
+* DESCRIPTION				:
+*	A function to free the memory of a singly linked list
+* PARAMETERS				:
+*	struct NameNode* head	: The head of the linked list to free
+* RETURNS					:
+* 	void 	    			: No return value
+*/
+void freeLinkedList(struct NameNode* head) {
+	struct NameNode* current = head;
+
+	while (current != NULL) {
+		struct NameNode* next = current->next;
+
+		free(current->name);
+		free(current);
+
+		current = next;
+	}
+}
+
+/*
+* FUNCTION							: freeHashTable
+* DESCRIPTION						:
+*	A function to free the memory of a hash table
+* PARAMETERS						:
+*	struct NameHashTable* hashTable	: The hash table to free
+* RETURNS							:
+* 	void 	    					: No return value
+*/
+void freeHashTable(struct NameHashTable* hashTable) {
+	for (int i = 0; i < BUCKET_COUNT; i++) {
+		freeLinkedList(hashTable->buckets[i]);
+	}
+
+	free(hashTable);
+}
 
 /*
 * FUNCTION		    : main
@@ -211,10 +278,6 @@ struct NameNode* searchLinkedList(char* searchName, struct NameNode* head, int* 
 * 	int 	    	: Whether the execution was successsful
 */
 int main() {
-	// names.txt is a text file containing 3000 all lowercase full names
-
-	// it is placed in the same directory as this source file so that the relative path "names.txt" can be easily used
-
 	FILE* namesFile = fopen("names.txt", "r");
 	if (namesFile == NULL) {
 		printf("Error: Failed to open names.txt, check that it exists\n");
@@ -232,16 +295,18 @@ int main() {
 		insertNameIntoLinkedList(&head, nameBuffer);
 	}
 	
-	fclose(namesFile); // we wont touch the file again after inserting so close it now
+	fclose(namesFile); // we won't touch the file again after inserting so close it now
 
 	if (head == NULL) { // quick check in case a file with nothing was used
 		printf("Error: Couldn't find names to insert, check that your names file is not empty\n");
 		return 1;
 	}
 
-	int linkedListComparisonCount = 0;
-
 	printf("Enter a name to search (Or . to exit):\n");
+
+	int totalSearchCount = 0;
+	int totalLinkedListComparisons = 0;
+	int totalHashTableComparisons = 0;
 
 	// im assuming the user will never search for names longer than 30
 	while (1) {
@@ -250,16 +315,32 @@ int main() {
 			return 1;
 		}
 
+		if (nameBuffer[0] == '\n') {
+			printf("Error: You entered a new line, please enter a valid name\n");
+			continue;
+		}
+
 		removeNewLine(nameBuffer);
 
 		if (strcmp(nameBuffer, ".") == 0) {
 			break;
 		}
 
-		searchLinkedList(nameBuffer, head, &linkedListComparisonCount);
+		int comparisonCount[2];
+		searchForNameTwice(nameBuffer, hashTable, comparisonCount, head);
+
+		totalSearchCount++;
+		totalLinkedListComparisons += comparisonCount[0];
+		totalHashTableComparisons += comparisonCount[1];
 	}
 
-	printf("\n\n\nSearching the large linked list did %d comparisons\n", linkedListComparisonCount);
+	printf("\n\n\n");
+	printf("In total %d searches were done\n", totalSearchCount);
+	printf("Searching the linked list did %d comparisons\n", totalLinkedListComparisons);
+	printf("Searching the hash table did %d comparisons\n", totalHashTableComparisons);
+
+	freeLinkedList(head);
+	freeHashTable(hashTable);
 
 	return 0;
 }
