@@ -14,7 +14,7 @@
 #include <string.h>
 
 #define BUCKET_COUNT 127
-#define READ_BUFFER_SIZE 33
+#define READ_NAME_BUFFER_SIZE 33
 
 struct NameNode {
 	char* name;
@@ -162,26 +162,44 @@ void removeNewLine(char* str) {
 	str[strcspn(str, "\n")] = '\0';
 }
 
-// test print functions
-void printAllNamesHT(struct NameHashTable* ht) {
-	for (int i = 0; i < BUCKET_COUNT; i++) {
-		printf("BUCKET %d\n\t", i);
-		struct NameNode* cur = ht->buckets[i];
+/*
+* FUNCTION							: searchLinkedList
+* DESCRIPTION						:
+*	A function to search a linked list for a specific name
+* PARAMETERS						:
+*	char* searchName				: The name to search
+*	struct NameNode* head			: A pointer to the head of the linked list
+*	int* comparisonCount			: A pointer to an integer for storing how many comparisons it took
+* RETURNS							:
+* 	struct NameNode*				: A pointer to the node containing the name
+*/
+struct NameNode* searchLinkedList(char* searchName, struct NameNode* head, int* comparisonCount) {
+	struct NameNode* result = NULL;
 
-		while (cur != NULL) {
-			printf("%s\n", cur->name);
-			cur = cur->next;
-		}
-	}
-}
-void printAllNamesLL(struct NameNode* head) {
 	struct NameNode* current = head;
+	while (current != NULL && result == NULL) {
+		(*comparisonCount)++;
+		if (strcmp(searchName, current->name) == 0) {
+			result = current;
+		}
 
-	while (current != NULL) {
-		printf("Name: %s\n", current->name);
 		current = current->next;
 	}
+
+	return result;
 }
+
+/*
+* FUNCTION							: searchForNameTwice
+* DESCRIPTION						:
+*	A function to search a hash table and the linked list of the bucket for a specific name
+* PARAMETERS						:
+*	char* searchName				: The name to search
+*	struct NameNode* head			: A pointer to the head of the linked list
+*	int* comparisonCount			: A pointer to an integer for storing how many comparisons it took
+* RETURNS							:
+* 	struct NameNode*				: A pointer to the node containing the name
+*/
 
 /*
 * FUNCTION		    : main
@@ -206,8 +224,8 @@ int main() {
 	struct NameHashTable* hashTable = initializeHashTable();
 	struct NameNode* head = NULL;
 	
-	char nameBuffer[READ_BUFFER_SIZE];
-	while (fgets(nameBuffer, READ_BUFFER_SIZE, namesFile)) {
+	char nameBuffer[READ_NAME_BUFFER_SIZE];
+	while (fgets(nameBuffer, READ_NAME_BUFFER_SIZE, namesFile) != NULL) {
 		removeNewLine(nameBuffer);
 
 		insertNameIntoHashTable(hashTable, nameBuffer);
@@ -216,8 +234,32 @@ int main() {
 	
 	fclose(namesFile); // we wont touch the file again after inserting so close it now
 
-	printAllNamesHT(hashTable);
-	printAllNamesLL(head);
+	if (head == NULL) { // quick check in case a file with nothing was used
+		printf("Error: Couldn't find names to insert, check that your names file is not empty\n");
+		return 1;
+	}
+
+	int linkedListComparisonCount = 0;
+
+	printf("Enter a name to search (Or . to exit):\n");
+
+	// im assuming the user will never search for names longer than 30
+	while (1) {
+		if (fgets(nameBuffer, READ_NAME_BUFFER_SIZE, stdin) == NULL) {
+			printf("Error: Failed to read input from stdin\n");
+			return 1;
+		}
+
+		removeNewLine(nameBuffer);
+
+		if (strcmp(nameBuffer, ".") == 0) {
+			break;
+		}
+
+		searchLinkedList(nameBuffer, head, &linkedListComparisonCount);
+	}
+
+	printf("\n\n\nSearching the large linked list did %d comparisons\n", linkedListComparisonCount);
 
 	return 0;
 }
